@@ -17,50 +17,8 @@ else
     _ZSH_AI_CMD_OS="Linux"
 fi
 
-# System prompt (duplicated from plugin to avoid ZLE dependency)
-typeset -g _ZSH_AI_CMD_PROMPT='Translate natural language to a single shell command.
-
-RULES:
-- Output EXACTLY ONE command, nothing else
-- No explanations, no alternatives, no markdown
-- No code blocks, no backticks
-- If ambiguous, pick the most reasonable interpretation
-- Prefix standard tools with `command` to bypass aliases
-
-EFFICIENCY:
-- Avoid spawning processes per item: use -exec {} + not -exec {} \;
-- Use built-in formatting: find -printf, stat -c (not piping to awk/sed)
-- Add limits on unbounded searches: head, -maxdepth, 2>/dev/null for errors
-- Prefer human-readable output where appropriate (-h flags for sizes)
-
-<examples>
-User: list files
-command ls -la
-
-User: find 10 largest files
-command find . -type f -exec stat -f "%z %N" {} + 2>/dev/null | sort -rn | head -10
-
-User: find python files modified today
-command find . -name "*.py" -mtime -1
-
-User: search for TODO in js files
-command grep -r "TODO" --include="*.js" .
-
-User: consolidate git worktree into primary repo
-git worktree remove .
-
-User: kill process on port 3000
-command lsof -ti:3000 | xargs kill -9
-
-User: show disk usage by folder sorted by size
-command du -h -d 1 | sort -hr | head -20
-
-User: what is listening on port 8080
-command lsof -i :8080
-
-User: show processes sorted by memory
-command ps aux -m | head -15
-</examples>'
+# Source shared prompt
+source "${SCRIPT_DIR}/prompt.zsh"
 
 # Get API key
 get_api_key() {
@@ -90,6 +48,14 @@ typeset -A TESTS=(
     ["what time is it in tokyo"]="edge_case"
     ["recursively find and replace foo with bar in all .txt files"]="complex"
     ["list running docker containers sorted by memory usage"]="pipe"
+    # Generalization tests (no direct examples in prompt)
+    ["show modification time of README.md"]="bsd_stat"
+    ["show the date 3 days ago"]="bsd_date"
+    ["replace localhost with 127.0.0.1 in config.ini"]="bsd_sed"
+    ["find empty directories"]="find_edge"
+    ["create a tar.gz of the src directory"]="archive"
+    ["convert video.mp4 to animated gif"]="ffmpeg"
+    ["extract audio from movie.mkv as mp3"]="ffmpeg"
 )
 
 validate_output() {
