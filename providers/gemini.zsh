@@ -49,6 +49,14 @@ _zsh_ai_cmd_gemini_call() {
     } >>$ZSH_AI_CMD_LOG
   fi
 
+  # Check for API error (Gemini format: {"error": {"message": "..."}})
+  local error_msg
+  error_msg=$(print -r -- "$response" | command jq -re '.error.message // empty' 2>/dev/null)
+  if [[ -n $error_msg ]]; then
+    print -u2 "zsh-ai-cmd [gemini]: $error_msg"
+    return 1
+  fi
+
   # Extract command from response (structured output ensures valid JSON)
   print -r -- "$response" | command jq -re '.candidates[0].content.parts[0].text | fromjson | .command // empty' 2>/dev/null
 }

@@ -46,6 +46,14 @@ _zsh_ai_cmd_ollama_call() {
     } >>$ZSH_AI_CMD_LOG
   fi
 
+  # Check for API error (Ollama format: {"error": "message"})
+  local error_msg
+  error_msg=$(print -r -- "$response" | command jq -re '.error // empty' 2>/dev/null)
+  if [[ -n $error_msg ]]; then
+    print -u2 "zsh-ai-cmd [ollama]: $error_msg"
+    return 1
+  fi
+
   # Extract command - structured output ensures valid JSON in .message.content
   print -r -- "$response" | command jq -re '.message.content | fromjson | .command // empty' 2>/dev/null
 }

@@ -54,6 +54,14 @@ _zsh_ai_cmd_openai_call() {
     } >>$ZSH_AI_CMD_LOG
   fi
 
+  # Check for API error (OpenAI format: {"error": {"message": "..."}})
+  local error_msg
+  error_msg=$(print -r -- "$response" | command jq -re '.error.message // empty' 2>/dev/null)
+  if [[ -n $error_msg ]]; then
+    print -u2 "zsh-ai-cmd [openai]: $error_msg"
+    return 1
+  fi
+
   # Extract command from response
   print -r -- "$response" | command jq -re '.choices[0].message.content | fromjson | .command // empty' 2>/dev/null
 }
