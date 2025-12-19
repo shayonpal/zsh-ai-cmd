@@ -4,11 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-zsh-ai-cmd is a single-file zsh plugin that translates natural language to shell commands using the Anthropic API. User types a description, presses `Ctrl+Z`, and sees the suggestion as ghost text. Tab accepts, typing dismisses.
+zsh-ai-cmd is a zsh plugin that translates natural language to shell commands using LLM APIs. User types a description, presses `Ctrl+Z`, and sees the suggestion as ghost text. Tab accepts, typing dismisses.
 
 ## Architecture
 
-The entire plugin lives in @zsh-ai-cmd.plugin.zsh . Key components:
+The main plugin lives in @zsh-ai-cmd.plugin.zsh with provider implementations in `providers/`.
+
+### Supported Providers
+
+ | Provider   | File                      | Default Model               | API Key Env Var     |
+ | ---------- | ------                    | ---------------             | -----------------   |
+ | Anthropic  | `providers/anthropic.zsh` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` |
+ | OpenAI     | `providers/openai.zsh`    | `gpt-5.2-2025-12-11`        | `OPENAI_API_KEY`    |
+ | Gemini     | `providers/gemini.zsh`    | `gemini-3-flash-preview`    | `GEMINI_API_KEY`    |
+ | DeepSeek   | `providers/deepseek.zsh`  | `deepseek-chat`             | `DEEPSEEK_API_KEY`  |
+ | Ollama     | `providers/ollama.zsh`    | `mistral-small`             | (none - local)      |
+
+Set provider via `ZSH_AI_CMD_PROVIDER='openai'` (default: `anthropic`).
+
+### Provider Implementation
+
+Each provider file exports two functions:
+- `_zsh_ai_cmd_<provider>_call "$input" "$prompt"` - Makes API call, prints command to stdout
+- `_zsh_ai_cmd_<provider>_key_error` - Prints setup instructions when API key missing
+
+All providers use structured outputs (JSON schema) where supported for reliable command extraction. The system prompt is shared across providers via `$_ZSH_AI_CMD_PROMPT` from `prompt.zsh`.
+
+### Core Components
 
 **Core Flow:**
 - **Widget function** `_zsh_ai_cmd_suggest`: Main entry point bound to keybinding. Captures buffer text, shows spinner, calls API, displays result as ghost text via `POSTDISPLAY`.
@@ -23,12 +45,22 @@ The entire plugin lives in @zsh-ai-cmd.plugin.zsh . Key components:
 
 ## Testing
 
-Replicated prompt and API tests live in @test-api.sh
+API response validation tests live in @test-api.sh:
 
 ```sh
-# Source the plugin directly
-source ./zsh-ai-cmd.plugin.zsh
+# Test default provider (anthropic)
+./test-api.sh
 
+# Test specific provider
+./test-api.sh --provider openai
+./test-api.sh --provider gemini
+./test-api.sh --provider ollama
+./test-api.sh --provider deepseek
+```
+
+Manual testing:
+```sh
+source ./zsh-ai-cmd.plugin.zsh
 # Type natural language, press Ctrl+Z
 list files modified today<Ctrl+Z>
 ```

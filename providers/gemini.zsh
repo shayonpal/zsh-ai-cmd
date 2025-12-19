@@ -1,7 +1,7 @@
 # providers/gemini.zsh - Google Gemini API provider
 # Uses system_instruction for system prompt, structured outputs for JSON
 
-typeset -g ZSH_AI_CMD_GEMINI_MODEL=${ZSH_AI_CMD_GEMINI_MODEL:-'gemini-2.5-flash'}
+typeset -g ZSH_AI_CMD_GEMINI_MODEL=${ZSH_AI_CMD_GEMINI_MODEL:-'gemini-3-flash-preview'}
 
 _zsh_ai_cmd_gemini_call() {
   local input=$1

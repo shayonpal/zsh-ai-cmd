@@ -1,7 +1,7 @@
 # providers/openai.zsh - OpenAI API provider
 # Uses structured outputs with JSON schema for reliable command extraction
 
-typeset -g ZSH_AI_CMD_OPENAI_MODEL=${ZSH_AI_CMD_OPENAI_MODEL:-'gpt-5-mini'}
+typeset -g ZSH_AI_CMD_OPENAI_MODEL=${ZSH_AI_CMD_OPENAI_MODEL:-'gpt-5.2-2025-12-11'}
 
 _zsh_ai_cmd_openai_call() {
   local input=$1
@@ -14,7 +14,7 @@ _zsh_ai_cmd_openai_call() {
     --arg content "$input" \
     '{
       model: $model,
-      max_tokens: 256,
+      max_completion_tokens: 256,
       messages: [
         {role: "system", content: $system},
         {role: "user", content: $content}
