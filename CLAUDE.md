@@ -38,10 +38,14 @@ All providers use structured outputs (JSON schema) where supported for reliable 
 - **Key retrieval** `_zsh_ai_cmd_get_key`: Lazy-loads API key from env var or macOS Keychain.
 
 **Ghost Text System:**
-- **`_zsh_ai_cmd_show_ghost`**: Displays suggestion in `POSTDISPLAY`. If suggestion extends current buffer, shows suffix only. Otherwise shows ` → suggestion`.
+- **`_zsh_ai_cmd_show_ghost`**: Displays suggestion in `POSTDISPLAY`. If suggestion extends current buffer, shows suffix only. Otherwise shows ` ⇥ suggestion`.
 - **`_zsh_ai_cmd_clear_ghost`**: Clears `POSTDISPLAY` and resets suggestion state.
-- **`_zsh_ai_cmd_update_ghost_on_edit`**: Called on keystroke. Clears ghost if user's edits diverge from suggestion.
 - **`_zsh_ai_cmd_accept`**: Tab handler. Accepts suggestion into buffer or falls through to normal tab completion.
+
+**State Machine:**
+- **`_zsh_ai_cmd_activate`**: Called after suggestion shown. Captures current Tab/right-arrow bindings, temporarily overrides them.
+- **`_zsh_ai_cmd_deactivate`**: Restores original bindings, clears state. Called on accept or buffer divergence.
+- **`_zsh_ai_cmd_pre_redraw`**: Hook that detects buffer changes. If buffer diverges from suggestion, deactivates.
 
 ## Testing
 
@@ -86,5 +90,10 @@ When modifying the spinner or UI code:
 - Background jobs need `NO_NOTIFY NO_MONITOR` to suppress job control noise
 - `read -t 0.1` provides non-blocking sleep without external deps
 
-**Widget Wrapping:**
-The plugin wraps `self-insert` and `backward-delete-char` to intercept keystrokes and update ghost text. This uses `zle .self-insert` (with dot prefix) to call the original widget. The idempotency guard at the top prevents double-wrapping if the plugin is sourced multiple times.
+**Dormant/Active State Machine:**
+The plugin uses a state machine to avoid conflicts with other plugins (like zsh-autosuggestions):
+- **Dormant** (default): Only `Ctrl+Z` trigger bound. Tab/right-arrow work normally.
+- **Active** (after Ctrl+Z shows suggestion): Tab/right-arrow temporarily bound to accept. Uses `zle-line-pre-redraw` hook to detect buffer changes.
+- **Deactivate** (on accept/dismiss): Restore original bindings, clear state.
+
+This design avoids permanent widget wrapping, so other plugins' `self-insert` wrappers see buffer changes normally. The idempotency guard at the top prevents double-loading if the plugin is sourced multiple times.

@@ -29,8 +29,6 @@ export DEEPSEEK_API_KEY='sk-...'
 security add-generic-password -s 'anthropic-api-key' -a "$USER" -w 'sk-ant-...'
 ```
 
-> **Note:** If you use plugins that bind the right arrow key (like zsh-autocomplete or zsh-autosuggestions), load zsh-ai-cmd **after** them. The plugin chains to the previous binding, so right arrow still triggers their completions when no AI suggestion is active.
-
 ## Usage
 
 1. Type a natural language description

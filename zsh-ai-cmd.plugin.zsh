@@ -28,8 +28,12 @@ typeset -g _ZSH_AI_CMD_SUGGESTION=""
 # OS detection (lazy-loaded on first API call)
 typeset -g _ZSH_AI_CMD_OS=""
 
-# Original widget for right arrow (for chaining)
-typeset -g _ZSH_AI_CMD_ORIG_FORWARD_CHAR=""
+# Dormant/Active state machine
+typeset -g _ZSH_AI_CMD_ACTIVE=0
+typeset -g _ZSH_AI_CMD_ORIG_TAB=""
+typeset -g _ZSH_AI_CMD_ORIG_RIGHT_ARROW=""
+typeset -g _ZSH_AI_CMD_BUFFER_AT_SUGGESTION=""
+typeset -g _ZSH_AI_CMD_LAST_HIGHLIGHT=""
 
 # ============================================================================
 # Security: Sanitize model output
@@ -82,6 +86,12 @@ _zsh_ai_cmd_show_ghost() {
   local suggestion=$1
   [[ $ZSH_AI_CMD_DEBUG == true ]] && print -- "show_ghost: suggestion='$suggestion' BUFFER='$BUFFER'" >> $ZSH_AI_CMD_LOG
 
+  # Clear any previous highlight first
+  [[ -n $_ZSH_AI_CMD_LAST_HIGHLIGHT ]] && {
+    region_highlight=("${(@)region_highlight:#$_ZSH_AI_CMD_LAST_HIGHLIGHT}")
+    _ZSH_AI_CMD_LAST_HIGHLIGHT=""
+  }
+
   if [[ -n $suggestion && $suggestion != $BUFFER ]]; then
     if [[ $suggestion == ${BUFFER}* ]]; then
       # Suggestion is completion of current buffer - show suffix
@@ -90,10 +100,11 @@ _zsh_ai_cmd_show_ghost() {
       # Suggestion is different - show with tab hint
       POSTDISPLAY="  ⇥  ${suggestion}"
     fi
-    # Apply grey highlighting via region_highlight (like zsh-autosuggestions)
+    # Apply grey highlighting with unique color (fg=242 to avoid collision with autosuggestions' fg=8)
     local start=$#BUFFER
     local end=$(( start + $#POSTDISPLAY ))
-    region_highlight+=("$start $end fg=8")
+    _ZSH_AI_CMD_LAST_HIGHLIGHT="$start $end fg=242"
+    region_highlight+=("$_ZSH_AI_CMD_LAST_HIGHLIGHT")
     [[ $ZSH_AI_CMD_DEBUG == true ]] && print -- "show_ghost: POSTDISPLAY='$POSTDISPLAY'" >> $ZSH_AI_CMD_LOG
   else
     POSTDISPLAY=""
@@ -103,16 +114,72 @@ _zsh_ai_cmd_show_ghost() {
 _zsh_ai_cmd_clear_ghost() {
   POSTDISPLAY=""
   _ZSH_AI_CMD_SUGGESTION=""
-  # Remove our highlight (filter out any fg=8 entries we added)
-  region_highlight=("${(@)region_highlight:#*fg=8}")
+  # Remove our specific highlight entry only
+  [[ -n $_ZSH_AI_CMD_LAST_HIGHLIGHT ]] && {
+    region_highlight=("${(@)region_highlight:#$_ZSH_AI_CMD_LAST_HIGHLIGHT}")
+    _ZSH_AI_CMD_LAST_HIGHLIGHT=""
+  }
 }
 
-_zsh_ai_cmd_update_ghost_on_edit() {
-  [[ -z $_ZSH_AI_CMD_SUGGESTION ]] && return
-  if [[ $_ZSH_AI_CMD_SUGGESTION == ${BUFFER}* ]]; then
-    _zsh_ai_cmd_show_ghost "$_ZSH_AI_CMD_SUGGESTION"
+# ============================================================================
+# Dormant/Active State Machine
+# ============================================================================
+
+_zsh_ai_cmd_activate() {
+  (( _ZSH_AI_CMD_ACTIVE )) && return
+  _ZSH_AI_CMD_ACTIVE=1
+  _ZSH_AI_CMD_BUFFER_AT_SUGGESTION="$BUFFER"
+
+  # Capture current bindings before overwriting
+  _ZSH_AI_CMD_ORIG_TAB=$(bindkey -M main '^I' 2>/dev/null | awk '{print $2}')
+  [[ $_ZSH_AI_CMD_ORIG_TAB == _zsh_ai_cmd_accept ]] && _ZSH_AI_CMD_ORIG_TAB=""
+  _ZSH_AI_CMD_ORIG_RIGHT_ARROW=$(bindkey -M main '^[[C' 2>/dev/null | awk '{print $2}')
+  [[ $_ZSH_AI_CMD_ORIG_RIGHT_ARROW == _zsh_ai_cmd_accept_arrow ]] && _ZSH_AI_CMD_ORIG_RIGHT_ARROW=""
+
+  # Bind our accept handlers
+  bindkey '^I' _zsh_ai_cmd_accept
+  bindkey '^[[C' _zsh_ai_cmd_accept_arrow
+}
+
+_zsh_ai_cmd_deactivate() {
+  (( ! _ZSH_AI_CMD_ACTIVE )) && return
+  _ZSH_AI_CMD_ACTIVE=0
+  _ZSH_AI_CMD_SUGGESTION=""
+  _ZSH_AI_CMD_BUFFER_AT_SUGGESTION=""
+  POSTDISPLAY=""
+
+  # Remove our highlight only
+  [[ -n $_ZSH_AI_CMD_LAST_HIGHLIGHT ]] && {
+    region_highlight=("${(@)region_highlight:#$_ZSH_AI_CMD_LAST_HIGHLIGHT}")
+    _ZSH_AI_CMD_LAST_HIGHLIGHT=""
+  }
+
+  # Restore original bindings
+  if [[ -n $_ZSH_AI_CMD_ORIG_TAB ]]; then
+    bindkey '^I' "$_ZSH_AI_CMD_ORIG_TAB"
   else
-    _zsh_ai_cmd_clear_ghost
+    bindkey '^I' expand-or-complete
+  fi
+  if [[ -n $_ZSH_AI_CMD_ORIG_RIGHT_ARROW ]]; then
+    bindkey '^[[C' "$_ZSH_AI_CMD_ORIG_RIGHT_ARROW"
+  else
+    bindkey '^[[C' forward-char
+  fi
+}
+
+_zsh_ai_cmd_pre_redraw() {
+  (( ! _ZSH_AI_CMD_ACTIVE )) && return
+
+  # Buffer changed since suggestion was shown
+  if [[ $BUFFER != $_ZSH_AI_CMD_BUFFER_AT_SUGGESTION ]]; then
+    if [[ $_ZSH_AI_CMD_SUGGESTION == ${BUFFER}* && -n $BUFFER ]]; then
+      # Still a valid prefix - update ghost
+      _zsh_ai_cmd_show_ghost "$_ZSH_AI_CMD_SUGGESTION"
+      _ZSH_AI_CMD_BUFFER_AT_SUGGESTION="$BUFFER"
+    else
+      # Diverged - deactivate
+      _zsh_ai_cmd_deactivate
+    fi
   fi
 }
 
@@ -181,6 +248,7 @@ _zsh_ai_cmd_suggest() {
   if [[ -n $suggestion ]]; then
     _ZSH_AI_CMD_SUGGESTION=$suggestion
     _zsh_ai_cmd_show_ghost "$suggestion"
+    _zsh_ai_cmd_activate
     zle -R
   else
     POSTDISPLAY=""
@@ -193,36 +261,25 @@ _zsh_ai_cmd_suggest() {
 # ============================================================================
 
 _zsh_ai_cmd_accept() {
-  if [[ -n $_ZSH_AI_CMD_SUGGESTION ]]; then
+  if [[ -n $_ZSH_AI_CMD_SUGGESTION ]] && (( _ZSH_AI_CMD_ACTIVE )); then
     BUFFER=$_ZSH_AI_CMD_SUGGESTION
     CURSOR=$#BUFFER
-    _zsh_ai_cmd_clear_ghost
+    _zsh_ai_cmd_deactivate
+  elif [[ -n $_ZSH_AI_CMD_ORIG_TAB ]]; then
+    zle "$_ZSH_AI_CMD_ORIG_TAB"
   else
     zle expand-or-complete
   fi
 }
 
-_zsh_ai_cmd_self_insert() {
-  zle .self-insert
-  _zsh_ai_cmd_update_ghost_on_edit
-}
-
-_zsh_ai_cmd_backward_delete_char() {
-  zle .backward-delete-char
-  _zsh_ai_cmd_update_ghost_on_edit
-}
-
-_zsh_ai_cmd_forward_char() {
-  # Accept suggestion on right arrow (matches Copilot/zsh-autosuggestions UX)
-  if [[ -n $_ZSH_AI_CMD_SUGGESTION ]]; then
+_zsh_ai_cmd_accept_arrow() {
+  if [[ -n $_ZSH_AI_CMD_SUGGESTION ]] && (( _ZSH_AI_CMD_ACTIVE )); then
     BUFFER=$_ZSH_AI_CMD_SUGGESTION
     CURSOR=$#BUFFER
-    _zsh_ai_cmd_clear_ghost
-  elif [[ -n $_ZSH_AI_CMD_ORIG_FORWARD_CHAR ]]; then
-    # Chain to original widget (e.g., zsh-autocomplete)
-    zle "$_ZSH_AI_CMD_ORIG_FORWARD_CHAR"
+    _zsh_ai_cmd_deactivate
+  elif [[ -n $_ZSH_AI_CMD_ORIG_RIGHT_ARROW ]]; then
+    zle "$_ZSH_AI_CMD_ORIG_RIGHT_ARROW"
   else
-    # Fallback to builtin
     zle .forward-char
   fi
 }
@@ -232,7 +289,7 @@ _zsh_ai_cmd_forward_char() {
 # ============================================================================
 
 _zsh_ai_cmd_line_finish() {
-  _zsh_ai_cmd_clear_ghost
+  (( _ZSH_AI_CMD_ACTIVE )) && _zsh_ai_cmd_deactivate
 }
 
 # ============================================================================
@@ -240,20 +297,21 @@ _zsh_ai_cmd_line_finish() {
 # ============================================================================
 
 zle -N zle-line-finish _zsh_ai_cmd_line_finish
-zle -N self-insert _zsh_ai_cmd_self_insert
-zle -N backward-delete-char _zsh_ai_cmd_backward_delete_char
-zle -N _zsh_ai_cmd_forward_char
 zle -N _zsh_ai_cmd_suggest
 zle -N _zsh_ai_cmd_accept
+zle -N _zsh_ai_cmd_accept_arrow
 
+# Only permanent binding: the trigger key
 bindkey "$ZSH_AI_CMD_KEY" _zsh_ai_cmd_suggest
-bindkey '^I' _zsh_ai_cmd_accept
 
-# Capture original right arrow binding before overwriting (for widget chaining)
-# This preserves zsh-autocomplete or other plugins that use right arrow
-_ZSH_AI_CMD_ORIG_FORWARD_CHAR=$(bindkey -M main '^[[C' 2>/dev/null | awk '{print $2}')
-[[ $_ZSH_AI_CMD_ORIG_FORWARD_CHAR == _zsh_ai_cmd_forward_char ]] && _ZSH_AI_CMD_ORIG_FORWARD_CHAR=""
-bindkey '^[[C' _zsh_ai_cmd_forward_char
+# Pre-redraw hook for buffer change detection (replaces widget wrapping)
+# Use add-zle-hook-widget if available (supports chaining), otherwise direct assignment
+autoload -Uz add-zle-hook-widget 2>/dev/null
+if (( $+functions[add-zle-hook-widget] )); then
+  add-zle-hook-widget line-pre-redraw _zsh_ai_cmd_pre_redraw
+else
+  zle -N zle-line-pre-redraw _zsh_ai_cmd_pre_redraw
+fi
 
 # ============================================================================
 # API Key Management
