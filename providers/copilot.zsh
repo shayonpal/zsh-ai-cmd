@@ -2,7 +2,7 @@
 # Uses OpenAI-compatible endpoint. No API key required (copilot-api handles GitHub OAuth).
 
 typeset -g ZSH_AI_CMD_COPILOT_MODEL=${ZSH_AI_CMD_COPILOT_MODEL:-'gpt-4o'}
-typeset -g ZSH_AI_CMD_COPILOT_HOST=${ZSH_AI_CMD_COPILOT_HOST:-'localhost:9191'}
+typeset -g ZSH_AI_CMD_COPILOT_HOST=${ZSH_AI_CMD_COPILOT_HOST:-'localhost:4141'}
 
 _zsh_ai_cmd_copilot_call() {
   local input=$1

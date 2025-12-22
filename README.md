@@ -52,7 +52,7 @@ ZSH_AI_CMD_GEMINI_MODEL='gemini-3-flash-preview'
 ZSH_AI_CMD_DEEPSEEK_MODEL='deepseek-chat'
 ZSH_AI_CMD_OLLAMA_MODEL='mistral-small'
 ZSH_AI_CMD_COPILOT_MODEL='gpt-4o'           # Requires copilot-api (npx copilot-api start)
-ZSH_AI_CMD_COPILOT_HOST='localhost:9191'    # copilot-api endpoint
+ZSH_AI_CMD_COPILOT_HOST='localhost:4141'    # copilot-api endpoint
 ```
 
 ## Provider Comparison
