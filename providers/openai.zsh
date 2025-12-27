@@ -14,7 +14,7 @@ _zsh_ai_cmd_openai_call() {
     --arg content "$input" \
     '{
       model: $model,
-      max_completion_tokens: 256,
+      max_completion_tokens: 1024,
       messages: [
         {role: "system", content: $system},
         {role: "user", content: $content}
