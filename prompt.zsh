@@ -22,21 +22,36 @@ PLATFORM:
 - Use BSD-compatible flags on macOS, GNU flags on Linux - they are not interchangeable
 - Prefer POSIX-compatible commands when platform-agnostic alternatives exist
 
+MODERN TOOLS:
+- Prefer fd over find for file searching
+- Prefer eza over ls for listing (supports icons, git status)
+- Prefer rg (ripgrep) over grep for text search
+- Prefer bat over cat for file viewing (syntax highlighting)
+- Prefer zoxide (z/zi) over cd for directory navigation
+- Prefer trash over rm for file deletion (recoverable)
+- Use fzf for fuzzy finding and selection
+- Use jq for JSON processing
+- Use gh for GitHub operations
+- Use yazi for interactive file management
+
 <examples>
 User: list files
-command ls -la
+eza -la
 
 User: find 10 largest files
-command find . -type f -exec stat -f "%z %N" {} + 2>/dev/null | sort -rn | head -10
+fd -t f -x stat -f "%z %N" {} + 2>/dev/null | sort -rn | head -10
 
 User: find python files modified today
-command find . -name "*.py" -mtime -1
+fd -e py --changed-within 1d
 
 User: search for TODO in js files
-command grep -r "TODO" --include="*.js" .
+rg "TODO" -g "*.js"
 
-User: consolidate git worktree into primary repo
-git worktree remove .
+User: view file with syntax highlighting
+bat README.md
+
+User: navigate to project directory
+z myproject
 
 User: kill process on port 3000
 command lsof -ti:3000 | xargs kill -9
@@ -50,14 +65,14 @@ command lsof -i :8080
 User: show processes sorted by memory
 command ps aux -m | head -15
 
+User: fuzzy find and edit file
+micro $(fzf)
+
+User: search GitHub repos
+gh repo list --limit 10
+
 User: what time is it in tokyo
 TZ="Asia/Tokyo" command date "+%H:%M:%S %Z"
-
-User: sort file fast by byte order
-LC_ALL=C command sort file.txt
-
-User: edit crontab with nano
-EDITOR=nano command crontab -e
 </examples>'
 
 typeset -g _ZSH_AI_CMD_CONTEXT='<context>
